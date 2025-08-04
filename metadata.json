@@ -1,0 +1,8 @@
+{
+  "uuid": "stickynotes-kr@kravhuravhu.github.io",
+  "name": "Sticky Notes (Kr-Edition)",
+  "description": "Sticky notes that float on top, support transparency, and multiple customization settings.",
+  "version": 1,
+  "shell-version": ["46"],
+  "url": "https://github.com/kravhuravhu/stickynotes-kr"
+}

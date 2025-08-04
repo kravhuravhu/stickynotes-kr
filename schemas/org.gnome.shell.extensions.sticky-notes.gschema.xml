@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.sticky-notes" path="/org/gnome/shell/extensions/sticky-notes/">
+    <key name="default-body-transparency" type="d">
+      <default>0.8</default>
+      <summary>Note body transparency</summary>
+      <description>Transparency level for the note body (0.0 is fully transparent, 1.0 is opaque)</description>
+      <range min="0.0" max="1.0"/>
+    </key>
+
+    <key name="note-font-size" type="i">
+      <default>14</default>
+      <summary>Note font size</summary>
+      <description>Font size for the note content</description>
+      <range min="8" max="72"/>
+    </key>
+
+    <key name="header-height" type="i">
+      <default>30</default>
+      <summary>Header height</summary>
+      <description>Height of the sticky note header in pixels</description>
+      <range min="20" max="100"/>
+    </key>
+
+    <key name="default-width" type="i">
+      <default>250</default>
+      <summary>Default note width</summary>
+      <description>Default width of new sticky notes</description>
+      <range min="100" max="800"/>
+    </key>
+
+    <key name="default-height" type="i">
+      <default>300</default>
+      <summary>Default note height</summary>
+      <description>Default height of new sticky notes</description>
+      <range min="100" max="800"/>
+    </key>
+
+    <key name="use-random-color" type="b">
+      <default>true</default>
+      <summary>Use random colors</summary>
+      <description>Assign random colors to new notes</description>
+    </key>
+
+    <key name="default-color-palette" type="as">
+      <default>['#f9e2af', '#89b4fa', '#a6e3a1', '#f38ba8', '#fab387', '#b4befe', '#94e2d5']</default>
+      <summary>Color palette</summary>
+      <description>Default color palette for sticky notes</description>
+    </key>
+
+    <key name="notes-data" type="s">
+      <default>'[]'</default>
+      <summary>Notes data</summary>
+      <description>JSON string containing all notes data</description>
+    </key>
+  </schema>
+</schemalist>
