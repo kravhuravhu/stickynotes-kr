@@ -96,9 +96,8 @@ export class NoteManager {
 
         note.connect('changed', () => this._saveNote(note));
 
-        note.connect('closing', () => {
-            // Close = hide/minimize — keep file
-            note.visible = false;
+        note.connect('minimizing', () => {
+            // Minimizing toggles the collapsed state — handled in NoteWindow
         });
 
         note.connect('deleting', () => {

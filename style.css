@@ -1,107 +1,16 @@
-/* Outer note frame — visible border */
+/* GNOME/libadwaita */
+
 .note-window {
     border-radius: 12px;
-    border: 2px solid rgba(0, 0, 0, 0.3);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
 }
 
-/* Header */
-.note-header {
-    padding: 8px 10px 6px 10px;
-    spacing: 6px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.15);
-}
-
-/* Title — bold, high contrast */
-.note-title {
-    font-weight: 700;
-    font-size: 15px;
-    border: 1px solid rgba(0, 0, 0, 0.2);
-    background: rgba(255, 255, 255, 0.92);
-    padding: 8px 12px;
-    border-radius: 8px;
-    color: #000000;
-    min-height: 36px;
-}
-.note-title:focus {
-    background: #ffffff;
-    border-color: rgba(0, 0, 0, 0.35);
-}
-
-/* Content area wrapper */
-.note-content-view {
-    padding: 8px 10px;
-}
-
-/* Inner container — distinct border */
-.note-content-container {
-    background: rgba(255, 255, 255, 0.85);
-    border: 1px solid rgba(0, 0, 0, 0.18);
-    border-radius: 10px;
-    padding: 10px;
-}
-
-/* Content text — maximum visibility */
-.note-content {
-    font-size: 14px;
-    font-weight: 500;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    background: rgba(255, 255, 255, 0.95);
-    padding: 12px;
-    border-radius: 8px;
-    color: #000000;
-    min-height: 140px;
-}
-.note-content:focus {
-    background: #ffffff;
-    border-color: rgba(0, 0, 0, 0.3);
-}
-
-/* Buttons — distinct and visible */
-.note-btn {
-    padding: 7px 9px;
-    border-radius: 7px;
-    border: 1px solid rgba(0, 0, 0, 0.2);
-    background: rgba(255, 255, 255, 0.9);
-    color: #111;
-}
-.note-btn:hover {
-    background: #ffffff;
-    border-color: rgba(0, 0, 0, 0.35);
-}
-.delete-btn {
-    border-color: rgba(180, 30, 30, 0.4);
-    color: #900;
-}
-.delete-btn:hover {
-    background: #fff0f0;
-    border-color: rgba(180, 30, 30, 0.6);
-}
-.close-btn {
-    border-color: rgba(80, 80, 80, 0.3);
-}
-
-/* Status bar */
-.note-status {
-    font-size: 11px;
-    padding: 4px 14px 8px 14px;
-    spacing: 8px;
-    border-top: 1px solid rgba(0, 0, 0, 0.1);
-}
-.note-status-text {
-    color: #222;
-    font-weight: 500;
-}
-
-/* Resize handle — visible corner */
-.note-resize-handle {
-    cursor: se-resize;
-    background: linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, 0.18) 50%);
-    border-radius: 0 0 10px 0;
-    border-top: 1px solid rgba(0, 0, 0, 0.1);
-    border-left: 1px solid rgba(0, 0, 0, 0.1);
-}
-
+/* panel */
 .panel-button {
     padding: 0 8px;
+    margin: 4px 2px;
+    border-radius: 8px;
+}
+
+.panel-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
 }
