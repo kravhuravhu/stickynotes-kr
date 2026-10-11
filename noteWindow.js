@@ -4,21 +4,17 @@ import GObject from 'gi://GObject';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import GLib from 'gi://GLib';
 
-// 5 HIGH-CONTRAST, GLASS-FRIENDLY COLORS
 const COLOR_PALETTE = [
-    '#F8E2E8',  // soft pink
-    '#F8E8D0',  // warm peach
-    '#F6F0C8',  // soft yellow
-    '#D8E8E8',  // cool mint
-    '#E0E8F0'   // light blue
+    '#F8E2E8', '#F8E8D0', '#F6F0C8', '#D8E8E8', '#E0E8F0'
 ];
 
 export const NoteWindow = GObject.registerClass({
     GTypeName: 'StickyNoteWindow',
     Signals: {
         'closing': {},
-        'changed': {},
-        'reminder-set': { param_types: [GObject.TYPE_DOUBLE] }
+        'deleting': {},
+        'minimizing': {},
+        'changed': {}
     }
 }, class NoteWindow extends St.Widget {
     _init(noteData = {}, settings = null) {
@@ -28,28 +24,23 @@ export const NoteWindow = GObject.registerClass({
             visible: true,
             style_class: 'note-window'
         });
-
         this._settings = settings;
         this._id = noteData.id || `note_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        this._isPinned = noteData.isPinned ?? (settings?.get_boolean('always-on-top-by-default') ?? false);
+        this._isMinimized = false;
         this._color = noteData.color || COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)];
         this._x = noteData.x ?? 150 + Math.random() * 300;
         this._y = noteData.y ?? 150 + Math.random() * 200;
-        this._width = noteData.width ?? (settings?.get_int('default-width') ?? 300);
-        this._height = noteData.height ?? (settings?.get_int('default-height') ?? 260);
+        this._width = noteData.width ?? 320;
+        this._height = noteData.height ?? 280;
         this._lastModified = noteData.lastModified || Date.now();
-        this._reminder = noteData.reminder || null;
         this._isFocused = false;
 
-        // CRITICAL: Set background color on the OUTER widget
         this._applyBaseStyle();
-
         this._buildUI(noteData.title || '', noteData.content || '');
         this._setupDrag();
         this._setupResize();
         this._applyGeometry();
         this._updateOpacity();
-        this._updateStacking();
 
         this.connect('enter-event', () => { this._isFocused = true; this._updateOpacity(); });
         this.connect('leave-event', () => { this._isFocused = false; this._updateOpacity(); });
@@ -58,14 +49,14 @@ export const NoteWindow = GObject.registerClass({
     _applyBaseStyle() {
         this.set_style(`
             background-color: ${this._color};
-            border-radius: 10px;
+            border-radius: 12px;
+            border: 2px solid rgba(0,0,0,0.25);
         `);
     }
 
     _updateOpacity() {
-        // Whole note ~80% transparent, slightly brighter on hover
-        const baseOpacity = 0.82;
-        const focusedOpacity = 0.92;
+        const baseOpacity = 0.96;
+        const focusedOpacity = 0.99;
         const opacity = this._isFocused ? focusedOpacity : baseOpacity;
         this.set_opacity(Math.round(opacity * 255));
     }
@@ -84,42 +75,44 @@ export const NoteWindow = GObject.registerClass({
 
         this._titleEntry = new St.Entry({
             text: titleText,
-            hint_text: 'Title...',
+            hint_text: 'Enter title...',
             style_class: 'note-title',
             can_focus: true,
             x_expand: true
         });
-        this._titleEntry.connect('notify::text', () => this._markChanged());
-
-        this._pinBtn = new St.Button({
-            child: new St.Icon({ icon_name: 'pin-symbolic', icon_size: 14 }),
-            style_class: 'note-btn',
-            reactive: true
-        });
-        this._pinBtn.connect('clicked', () => {
-            this._isPinned = !this._isPinned;
-            this._updateStacking();
+        this._titleEntry.connect('notify::text', () => {
+            this._lastModified = Date.now();
             this._markChanged();
         });
 
-        this._reminderBtn = new St.Button({
-            child: new St.Icon({ icon_name: 'alarm-symbolic', icon_size: 14 }),
+        // Minimize button (-)
+        this._minBtn = new St.Button({
+            child: new St.Icon({ icon_name: 'window-minimize-symbolic', icon_size: 15 }),
             style_class: 'note-btn',
             reactive: true
         });
-        this._reminderBtn.connect('clicked', () => this._showReminderDialog());
+        this._minBtn.connect('clicked', () => this._toggleMinimize());
 
-        const closeBtn = new St.Button({
-            child: new St.Icon({ icon_name: 'window-close-symbolic', icon_size: 14 }),
-            style_class: 'note-btn',
+        // Delete bin button
+        this._delBtn = new St.Button({
+            child: new St.Icon({ icon_name: 'user-trash-symbolic', icon_size: 15 }),
+            style_class: 'note-btn delete-btn',
             reactive: true
         });
-        closeBtn.connect('clicked', () => this.emit('closing'));
+        this._delBtn.connect('clicked', () => this.emit('deleting'));
+
+        // Close button (X) — hides/minimizes
+        this._closeBtn = new St.Button({
+            child: new St.Icon({ icon_name: 'window-close-symbolic', icon_size: 15 }),
+            style_class: 'note-btn close-btn',
+            reactive: true
+        });
+        this._closeBtn.connect('clicked', () => this.emit('closing'));
 
         this._header.add_child(this._titleEntry);
-        this._header.add_child(this._pinBtn);
-        this._header.add_child(this._reminderBtn);
-        this._header.add_child(closeBtn);
+        this._header.add_child(this._minBtn);
+        this._header.add_child(this._delBtn);
+        this._header.add_child(this._closeBtn);
         this.add_child(this._header);
 
         // Content area
@@ -151,7 +144,12 @@ export const NoteWindow = GObject.registerClass({
 
         this._contentContainer.add_child(this._contentEntry);
         this._contentView.set_child(this._contentContainer);
-        this.add_child(this._contentView);
+        this._bodyContainer = new St.Widget({
+            layout_manager: new Clutter.BoxLayout({ orientation: Clutter.Orientation.VERTICAL }),
+            x_expand: true, y_expand: true
+        });
+        this._bodyContainer.add_child(this._contentView);
+        this.add_child(this._bodyContainer);
 
         // Status bar
         this._statusBar = new St.Widget({
@@ -164,12 +162,7 @@ export const NoteWindow = GObject.registerClass({
             x_expand: true,
             style_class: 'note-status-text'
         });
-        this._reminderLabel = new St.Label({
-            text: this._reminder ? `⏰ ${this._formatTime(this._reminder)}` : '',
-            style_class: this._reminder ? 'reminder-set' : 'note-status-text'
-        });
         this._statusBar.add_child(this._timeLabel);
-        this._statusBar.add_child(this._reminderLabel);
         this.add_child(this._statusBar);
 
         // Resize handle
@@ -178,20 +171,38 @@ export const NoteWindow = GObject.registerClass({
             x_align: Clutter.ActorAlign.END,
             y_align: Clutter.ActorAlign.END,
             reactive: true,
-            width: 18,
-            height: 18
+            width: 20,
+            height: 20
         });
         this.add_child(this._resizeHandle);
+    }
 
-        this._updateReminderDisplay();
+    _toggleMinimize() {
+        this._isMinimized = !this._isMinimized;
+        this._bodyContainer.visible = !this._isMinimized;
+        this._statusBar.visible = !this._isMinimized;
+        this._resizeHandle.visible = !this._isMinimized;
+        if (this._isMinimized) {
+            this.set_size(this._width, 50);
+        } else {
+            this.set_size(this._width, this._height);
+        }
+        this.emit('minimizing');
     }
 
     _setupDrag() {
         let dragging = false, startX, startY, origX, origY;
         this._header.connect('button-press-event', (actor, evt) => {
             if (evt.get_button() !== Clutter.BUTTON_PRIMARY) return Clutter.EVENT_PROPAGATE;
-            const btn = evt.get_event_actor();
-            if (btn && btn.has_style_class_name('note-btn')) return Clutter.EVENT_PROPAGATE;
+            const clickTarget = evt.get_source();
+            if (clickTarget && (
+                clickTarget === this._minBtn ||
+                clickTarget === this._delBtn ||
+                clickTarget === this._closeBtn ||
+                clickTarget.get_parent() === this._minBtn ||
+                clickTarget.get_parent() === this._delBtn ||
+                clickTarget.get_parent() === this._closeBtn
+            )) return Clutter.EVENT_PROPAGATE;
             dragging = true;
             [startX, startY] = evt.get_coords();
             [origX, origY] = this.get_position();
@@ -224,9 +235,9 @@ export const NoteWindow = GObject.registerClass({
         this._resizeHandle.connect('motion-event', (_, evt) => {
             if (!resizing) return Clutter.EVENT_PROPAGATE;
             const [x, y] = evt.get_coords();
-            this._width = Math.max(220, origW + (x - startX));
-            this._height = Math.max(160, origH + (y - startY));
-            this.set_size(this._width, this._height);
+            this._width = Math.max(240, origW + (x - startX));
+            this._height = Math.max(180, origH + (y - startY));
+            if (!this._isMinimized) this.set_size(this._width, this._height);
             return Clutter.EVENT_STOP;
         });
         this._resizeHandle.connect('button-release-event', () => {
@@ -241,55 +252,11 @@ export const NoteWindow = GObject.registerClass({
         this.set_size(this._width, this._height);
     }
 
-    _updateStacking() {
-        const parent = this.get_parent();
-        if (!parent) return;
-        if (this._isPinned) {
-            parent.set_child_above_sibling(this, null);
-        }
-        this._pinBtn.set_style(`color: ${this._isPinned ? '#2E7D32' : '#666'};`);
-    }
-
-    _showReminderDialog() {
-        const now = Date.now();
-        const options = [
-            { label: 'In 30 minutes', ms: now + 1800000 },
-            { label: 'In 1 hour', ms: now + 3600000 },
-            { label: 'In 3 hours', ms: now + 10800000 },
-            { label: 'Tomorrow', ms: now + 86400000 },
-            { label: 'Clear reminder', ms: null }
-        ];
-        const menu = new St.Menu({ x: 0, y: 0 });
-        options.forEach(opt => {
-            const item = new St.MenuItem({ label: opt.label });
-            item.connect('activate', () => {
-                this._reminder = opt.ms;
-                this._updateReminderDisplay();
-                this._markChanged();
-                if (opt.ms) this.emit('reminder-set', opt.ms);
-            });
-            menu.addMenuItem(item);
-        });
-        menu.open(St.PopupDirection.DOWN, this._reminderBtn);
-    }
-
-    _updateReminderDisplay() {
-        if (!this._reminderLabel) return;
-        if (this._reminder) {
-            this._reminderLabel.set_text(`⏰ ${this._formatTime(this._reminder)}`);
-            this._reminderLabel.add_style_class_name('reminder-set');
-        } else {
-            this._reminderLabel.set_text('');
-            this._reminderLabel.remove_style_class_name('reminder-set');
-        }
-    }
-
     _formatTime(ms) {
         return new Date(ms).toLocaleString();
     }
 
     _markChanged() {
-        this._lastModified = Date.now();
         this._timeLabel?.set_text(`Edited: ${this._formatTime(this._lastModified)}`);
         this.emit('changed');
     }
@@ -304,9 +271,7 @@ export const NoteWindow = GObject.registerClass({
             y: this._y,
             width: this._width,
             height: this._height,
-            isPinned: this._isPinned,
-            lastModified: this._lastModified,
-            reminder: this._reminder
+            lastModified: this._lastModified
         };
     }
 });
