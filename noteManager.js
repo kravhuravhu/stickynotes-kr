@@ -26,33 +26,38 @@ export class NoteManager {
 
     _saveNote(noteWindow) {
         const data = noteWindow.getData();
-        // Only save if title is NOT empty
         if (!data.title.trim()) {
-            console.log('[StickyNotes] Skipping save — title is empty');
+            console.log('[StickyNotes] Skipping save — title empty');
             return;
         }
-        const timestamp = data.lastModified;
-        const filename = this._getFilename(data.title, timestamp);
+        const titleKey = data.title.trim();
+        if (!noteWindow._titleTimestamp || noteWindow._prevTitle !== titleKey) {
+            if (noteWindow._prevTitle) {
+                this._deleteFile(noteWindow._prevTitle, noteWindow._titleTimestamp);
+            }
+            noteWindow._prevTitle = titleKey;
+            noteWindow._titleTimestamp = data.lastModified;
+        }
+        const filename = this._getFilename(titleKey, noteWindow._titleTimestamp);
         const file = this._notesDir.get_child(filename);
         try {
-            const json = JSON.stringify(data, null, 2);
-            file.replace_contents(json, null, false, Gio.FileCreateFlags.NONE, null);
+            file.replace_contents(JSON.stringify(data, null, 2), null, false, Gio.FileCreateFlags.NONE, null);
             console.log(`[StickyNotes] Saved: ${filename}`);
         } catch (e) {
-            console.error(`[StickyNotes] Save failed ${filename}: ${e}`);
+            console.error(`[StickyNotes] Save failed: ${e}`);
         }
     }
 
-    _deleteOldNote(oldData) {
-        if (!oldData.title.trim()) return;
-        const oldFilename = this._getFilename(oldData.title, oldData.lastModified);
-        const oldFile = this._notesDir.get_child(oldFilename);
-        if (oldFile.query_exists(null)) {
+    _deleteFile(title, timestamp) {
+        if (!title?.trim()) return;
+        const fn = this._getFilename(title, timestamp);
+        const f = this._notesDir.get_child(fn);
+        if (f.query_exists(null)) {
             try {
-                oldFile.delete(null);
-                console.log(`[StickyNotes] Deleted old: ${oldFilename}`);
+                f.delete(null);
+                console.log(`[StickyNotes] Deleted file: ${fn}`);
             } catch (e) {
-                console.warn(`[StickyNotes] Could not remove old file: ${e}`);
+                console.warn(`[StickyNotes] Delete failed: ${e}`);
             }
         }
     }
@@ -71,7 +76,7 @@ export class NoteManager {
                         const data = JSON.parse(new TextDecoder().decode(contents));
                         this._createNoteFromData(data, false);
                     } catch (e) {
-                        console.warn(`[StickyNotes] Could not load ${name}: ${e}`);
+                        console.warn(`[StickyNotes] Skip ${name}: ${e}`);
                     }
                 }
             }
@@ -83,48 +88,42 @@ export class NoteManager {
 
     _createNoteFromData(noteData, saveInstantly = false) {
         const note = new NoteWindow(noteData, this._settings);
-
-        // ✅ CRITICAL: Add note to the UI so it's visible!
+        if (noteData.title?.trim()) {
+            note._prevTitle = noteData.title.trim();
+            note._titleTimestamp = noteData.lastModified;
+        }
         Main.layoutManager.uiGroup.add_child(note);
 
-        // Save logic: only save when title changes & is non-empty
-        note.connect('changed', () => {
-            const currentData = note.getData();
-            // Delete old file if title changed
-            if (note._prevData && note._prevData.title !== currentData.title) {
-                this._deleteOldNote(note._prevData);
-            }
-            note._prevData = currentData;
-            this._saveNote(note);
-        });
+        note.connect('changed', () => this._saveNote(note));
 
         note.connect('closing', () => {
+            // Close = hide/minimize — keep file
+            note.visible = false;
+        });
+
+        note.connect('deleting', () => {
+            // Trash = DELETE file + remove from UI
+            if (note._prevTitle) {
+                this._deleteFile(note._prevTitle, note._titleTimestamp);
+            }
             this._notes = this._notes.filter(n => n !== note);
-            Main.layoutManager.uiGroup.remove_child(note);
+            try { Main.layoutManager.uiGroup.remove_child(note); } catch {}
             note.destroy();
         });
 
         this._notes.push(note);
-
-        // Don't auto-save blank new notes — wait for user to type a title
-        if (saveInstantly && noteData.title?.trim()) {
-            note._prevData = note.getData();
-            this._saveNote(note);
-        }
+        if (saveInstantly && noteData.title?.trim()) this._saveNote(note);
     }
 
     createNew() {
         this._createNoteFromData({
             x: 150 + Math.random() * 200,
             y: 150 + Math.random() * 150
-        }, false); // false = don't save until user enters title
+        }, false);
     }
 
     destroy() {
-        this._notes.forEach(n => {
-            try { Main.layoutManager.uiGroup.remove_child(n); } catch {}
-            n.destroy();
-        });
+        this._notes.forEach(n => { try { Main.layoutManager.uiGroup.remove_child(n); } catch {}; n.destroy(); });
         this._notes = [];
     }
 }
