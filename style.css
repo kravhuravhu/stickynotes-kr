@@ -1,55 +1,97 @@
+/* Base note window — background is set via JS per-note color */
 .note-window {
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    margin: 4px;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
+/* Header */
+.note-header {
+    padding: 8px 8px 4px 8px;
+    spacing: 4px;
+}
+
+/* Title field */
 .note-title {
     font-weight: 600;
     font-size: 14px;
     border: none;
-    background: transparent;
-    margin: 0 6px;
-    padding: 2px 4px;
+    background: rgba(255, 255, 255, 0.5);
+    padding: 6px 10px;
+    border-radius: 6px;
     color: #1A1A1A;
+    min-height: 32px;
+    /* Force text to start at top */
+    vertical-align: top;
+}
+
+.note-title StLabel,
+.note-title StEntry,
+.note-title StClutterText {
+    vertical-align: top;
 }
 
 .note-title:focus {
-    background: rgba(255, 255, 255, 0.4);
-    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.75);
+    color: #111111;
 }
 
+/* Scroll view */
+.note-content-view {
+    padding: 4px 8px 8px 8px;
+}
+
+/* Content container */
+.note-content-container {
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 8px;
+    padding: 8px;
+}
+
+/* Content text field */
 .note-content {
     font-size: 13px;
     border: none;
-    background: transparent;
-    padding: 8px;
+    background: rgba(255, 255, 255, 0.6);
+    padding: 10px;
+    border-radius: 6px;
     color: #222222;
+    min-height: 100px;
+    /* Force text to start at top */
+    vertical-align: top;
+}
+
+.note-content StLabel,
+.note-content StEntry,
+.note-content StClutterText {
+    vertical-align: top;
 }
 
 .note-content:focus {
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.85);
+    color: #111111;
 }
 
+/* Buttons */
 .note-btn {
-    padding: 4px 6px;
-    margin-left: 4px;
+    padding: 6px 8px;
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.25);
-    transition: background 0.2s ease;
+    background: rgba(255, 255, 255, 0.45);
+    transition: background 0.15s ease;
 }
 
 .note-btn:hover {
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.8);
 }
 
+/* Status bar */
 .note-status {
     font-size: 10px;
-    padding: 4px 10px;
-    background: rgba(0, 0, 0, 0.04);
-    border-radius: 0 0 12px 12px;
-    color: #444;
+    padding: 4px 12px 8px 12px;
+    spacing: 8px;
+}
+
+.note-status-text {
+    color: #444444;
 }
 
 .reminder-set {
@@ -57,14 +99,14 @@
     font-weight: bold;
 }
 
+/* Resize handle */
 .note-resize-handle {
-    width: 18px;
-    height: 18px;
     cursor: se-resize;
     background: linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, 0.12) 50%);
-    border-radius: 0 0 12px 0;
+    border-radius: 0 0 10px 0;
 }
 
+/* Panel button */
 .panel-button {
     padding: 0 8px;
 }
