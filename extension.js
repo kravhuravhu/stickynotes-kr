@@ -1,63 +1,42 @@
-const ExtensionUtils = imports.misc.extensionUtils;
-const Main = imports.ui.main;
-const PanelMenu = imports.ui.panelMenu;
-const PopupMenu = imports.ui.popupMenu;
-const St = imports.gi.St;
+import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import St from 'gi://St';
+import Clutter from 'gi://Clutter';
+import { NoteManager } from './noteManager.js';
 
-function init() {
-    return new StickyNotesExtension();
-}
-
-var StickyNotesExtension = class {
-    constructor() {
-        this._noteManager = null;
-        this._indicator = null;
-    }
-
+export default class StickyNotesExtension extends Extension {
     enable() {
-        const NoteManager = ExtensionUtils.getCurrentExtension().imports.noteManager.NoteManager;
-        this._noteManager = new NoteManager();
-        this._noteManager.loadNotes();
+        this._settings = this.getSettings();
+        this._manager = new NoteManager(this.uuid, this._settings);
 
-        // Add panel indicator
-        this._indicator = new PanelMenu.Button(0.0, 'Sticky Notes', false);
-
-        let icon = new St.Icon({
-            icon_name: 'accessories-text-editor-symbolic',
-            style_class: 'system-status-icon'
+        // Panel icon
+        this._button = new St.Button({
+            child: new St.Icon({
+                icon_name: 'note-edit-symbolic',
+                icon_size: 16,
+                style_class: 'system-status-icon'
+            }),
+            style_class: 'panel-button'
         });
+        this._button.connect('clicked', () => this._manager.createNew());
+        Main.panel._rightBox.insert_child_at_index(this._button, 0);
 
-        this._indicator.add_child(icon);
-
-        let menu = new PopupMenu.PopupMenu(this._indicator, 0.0, St.Side.BOTTOM);
-        this._indicator.menu = menu;
-
-        // Add menu items
-        let newNoteItem = new PopupMenu.PopupMenuItem('New Note');
-        newNoteItem.connect('activate', function() {
-            this._noteManager.createNewNote();
-        }.bind(this));
-        menu.addMenuItem(newNoteItem);
-
-        let settingsItem = new PopupMenu.PopupMenuItem('Settings');
-        settingsItem.connect('activate', function() {
-            ExtensionUtils.openPrefs();
+        // Hide notes when Overview opens
+        this._overviewShownId = Main.overview.connect('shown', () => {
+            this._manager._notes.forEach(n => n.setVisible(false));
         });
-        menu.addMenuItem(settingsItem);
-
-        Main.panel.addToStatusArea('sticky-notes-indicator', this._indicator);
+        this._overviewHiddenId = Main.overview.connect('hidden', () => {
+            this._manager._notes.forEach(n => n.setVisible(true));
+        });
     }
 
     disable() {
-        if (this._noteManager) {
-            this._noteManager.saveNotes();
-            this._noteManager.destroyAllNotes();
-            this._noteManager = null;
-        }
-
-        if (this._indicator) {
-            this._indicator.destroy();
-            this._indicator = null;
-        }
+        Main.overview.disconnect(this._overviewShownId);
+        Main.overview.disconnect(this._overviewHiddenId);
+        this._manager.destroy();
+        this._manager = null;
+        this._button.destroy();
+        this._button = null;
+        this._settings = null;
     }
-};
+}
