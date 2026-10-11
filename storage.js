@@ -37,9 +37,14 @@ export class Storage {
 
     save(notes) {
         try {
-            this._dataDir.make_directory_with_parents(null);
+            // FIX: Only create if NOT exists
+            if (!this._dataDir.query_exists(null)) {
+                this._dataDir.make_directory_with_parents(null);
+            }
             const data = JSON.stringify(notes, null, 2);
-            this._file.replace_contents(data, null, false, Gio.FileCreateFlags.NONE, null);
+            this._file.replace_contents(
+                data, null, false, Gio.FileCreateFlags.NONE, null
+            );
         } catch (e) {
             console.error(`[StickyNotes] Save failed: ${e}`);
         }
