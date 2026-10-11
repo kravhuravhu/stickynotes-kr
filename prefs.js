@@ -1,145 +1,62 @@
-const ExtensionUtils = imports.misc.extensionUtils;
-const GObject = imports.gi.GObject;
-const Gtk = imports.gi.Gtk;
+import Adw from 'gi://Adw';
+import Gtk from 'gi://Gtk';
+import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-function init() {
-    return new StickyNotesPrefsWidget();
+export default class StickyNotesPrefs extends ExtensionPreferences {
+    fillPreferencesWindow(window) {
+        const settings = this.getSettings();
+
+        const page = new Adw.PreferencesPage();
+        page.set_title('General');
+
+        // Save Directory
+        const pathGroup = new Adw.PreferencesGroup({ title: 'Storage' });
+        const pathRow = new Adw.ActionRow({ title: 'Save Directory' });
+        const pathInput = new Gtk.Entry({
+            text: settings.get_string('save-directory'),
+            hexpand: true,
+            margin_start: 12,
+            margin_end: 12
+        });
+        pathInput.connect('changed', e => settings.set_string('save-directory', e.text));
+        pathRow.add_suffix(pathInput);
+        pathGroup.add(pathRow);
+        page.add(pathGroup);
+
+        // Appearance
+        const appearGroup = new Adw.PreferencesGroup({ title: 'Appearance' });
+        const transp = new Adw.SpinRow({
+            title: 'Transparency',
+            subtitle: '0 = fully transparent, 1 = opaque',
+            adjustment: new Gtk.Adjustment({ lower: 0.3, upper: 1.0, step_increment: 0.05 })
+        });
+        settings.bind('transparency', transp, 'value', 0);
+        appearGroup.add(transp);
+
+        const pinDefault = new Adw.SwitchRow({
+            title: 'Always on Top by Default'
+        });
+        settings.bind('always-on-top-by-default', pinDefault, 'active', 0);
+        appearGroup.add(pinDefault);
+        page.add(appearGroup);
+
+        // Default Sizes
+        const sizeGroup = new Adw.PreferencesGroup({ title: 'Defaults' });
+        const defW = new Adw.SpinRow({
+            title: 'Default Width',
+            adjustment: new Gtk.Adjustment({ lower: 180, upper: 600, step_increment: 10 })
+        });
+        settings.bind('default-width', defW, 'value', 0);
+        sizeGroup.add(defW);
+
+        const defH = new Adw.SpinRow({
+            title: 'Default Height',
+            adjustment: new Gtk.Adjustment({ lower: 150, upper: 800, step_increment: 10 })
+        });
+        settings.bind('default-height', defH, 'value', 0);
+        sizeGroup.add(defH);
+        page.add(sizeGroup);
+
+        window.add(page);
+    }
 }
-
-var StickyNotesPrefsWidget = GObject.registerClass({
-    GTypeName: 'StickyNotesPrefsWidget'
-}, class StickyNotesPrefsWidget extends Gtk.Box {
-    _init() {
-        super._init({
-            orientation: Gtk.Orientation.VERTICAL,
-            spacing: 10,
-            margin_top: 10,
-            margin_bottom: 10,
-            margin_start: 10,
-            margin_end: 10
-        });
-
-        this._settings = ExtensionUtils.getSettings('org.gnome.shell.extensions.sticky-notes');
-        this._buildUI();
-    }
-
-    _buildUI() {
-        // Transparency setting
-        this._addScaleSetting('Note Body Transparency:', 'default-body-transparency', 0.0, 1.0, 0.1);
-
-        // Font size setting
-        this._addSpinSetting('Font Size:', 'note-font-size', 8, 72, 1);
-
-        // Header height setting
-        this._addSpinSetting('Header Height:', 'header-height', 20, 100, 1);
-
-        // Default width setting
-        this._addSpinSetting('Default Width:', 'default-width', 100, 800, 10);
-
-        // Default height setting
-        this._addSpinSetting('Default Height:', 'default-height', 100, 800, 10);
-
-        // Random colors setting
-        this._addSwitchSetting('Use Random Colors:', 'use-random-color');
-
-        // Color palette setting
-        this._addColorPaletteSetting();
-    }
-
-    _addScaleSetting(labelText, settingKey, min, max, step) {
-        let row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 10 });
-        let label = new Gtk.Label({ label: labelText, hexpand: true, xalign: 0 });
-        row.append(label);
-
-        let scale = new Gtk.Scale({
-            adjustment: new Gtk.Adjustment({
-                value: this._settings.get_double(settingKey),
-                lower: min,
-                upper: max,
-                step_increment: step
-            }),
-            digits: 1,
-            hexpand: true
-        });
-        scale.connect('value-changed', function(scale) {
-            this._settings.set_double(settingKey, scale.get_value());
-        }.bind(this));
-        row.append(scale);
-        this.append(row);
-    }
-
-    _addSpinSetting(labelText, settingKey, min, max, step) {
-        let row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 10 });
-        let label = new Gtk.Label({ label: labelText, hexpand: true, xalign: 0 });
-        row.append(label);
-
-        let spin = new Gtk.SpinButton({
-            adjustment: new Gtk.Adjustment({
-                value: this._settings.get_int(settingKey),
-                lower: min,
-                upper: max,
-                step_increment: step
-            })
-        });
-        spin.connect('value-changed', function(spin) {
-            this._settings.set_int(settingKey, spin.get_value_as_int());
-        }.bind(this));
-        row.append(spin);
-        this.append(row);
-    }
-
-    _addSwitchSetting(labelText, settingKey) {
-        let row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 10 });
-        let label = new Gtk.Label({ label: labelText, hexpand: true, xalign: 0 });
-        row.append(label);
-
-        let switch_ = new Gtk.Switch({
-            active: this._settings.get_boolean(settingKey)
-        });
-        switch_.connect('notify::active', function(switch_) {
-            this._settings.set_boolean(settingKey, switch_.active);
-        }.bind(this));
-        row.append(switch_);
-        this.append(row);
-    }
-
-    _addColorPaletteSetting() {
-        let colorPaletteRow = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 5 });
-        let colorPaletteLabel = new Gtk.Label({
-            label: 'Color Palette (hex values, one per line):',
-            xalign: 0
-        });
-        colorPaletteRow.append(colorPaletteLabel);
-
-        let colorPaletteText = new Gtk.TextView({
-            wrap_mode: Gtk.WrapMode.WORD,
-            height_request: 100
-        });
-
-        let currentColors = this._settings.get_strv('default-color-palette');
-        let buffer = colorPaletteText.get_buffer();
-        buffer.set_text(currentColors.join('\n'), -1);
-
-        let scrolledWindow = new Gtk.ScrolledWindow({
-            child: colorPaletteText
-        });
-        colorPaletteRow.append(scrolledWindow);
-
-        let saveColorsButton = new Gtk.Button({
-            label: 'Save Colors',
-            halign: Gtk.Align.END
-        });
-        saveColorsButton.connect('clicked', function() {
-            let [start, end] = buffer.get_bounds();
-            let text = buffer.get_text(start, end, false);
-            let colors = text.split('\n').filter(function(color) {
-                return /^#[0-9A-Fa-f]{6}$/.test(color);
-            });
-            if (colors.length > 0) {
-                this._settings.set_strv('default-color-palette', colors);
-            }
-        }.bind(this));
-        colorPaletteRow.append(saveColorsButton);
-        this.append(colorPaletteRow);
-    }
-});

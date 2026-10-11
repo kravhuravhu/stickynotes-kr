@@ -1,87 +1,114 @@
-const ExtensionUtils = imports.misc.extensionUtils;
-const GObject = imports.gi.GObject;
-const Gtk = imports.gi.Gtk;
+import GObject from 'gi://GObject';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import { NoteWindow } from './noteWindow.js';
+import { Storage } from './storage.js';
 
-var NoteManager = class NoteManager {
-    constructor() {
-        this._settings = ExtensionUtils.getSettings('org.gnome.shell.extensions.sticky-notes');
+export const NoteManager = GObject.registerClass(class NoteManager extends GObject.Object {
+    _init(extensionUuid, settings) {
+        super._init();
+        this._uuid = extensionUuid;
+        this._settings = settings;
         this._notes = [];
-        this._nextNoteId = 1;
-    }
+        this._reminderSources = new Map();
 
-    createNewNote(content, x, y, width, height, color, isPinned) {
-        content = content || '';
-        x = x || -1;
-        y = y || -1;
-        width = width || this._settings.get_int('default-width');
-        height = height || this._settings.get_int('default-height');
+        // Safe get for settings
+        const saveDir = this._getSafe('save-directory', '');
+        this._storage = new Storage(this._uuid, saveDir);
 
-        if (color === null && this._settings.get_boolean('use-random-color')) {
-            let palette = this._settings.get_strv('default-color-palette');
-            color = palette[Math.floor(Math.random() * palette.length)];
-        }
-
-        let noteId = this._nextNoteId++;
-        let NoteWindow = ExtensionUtils.getCurrentExtension().imports.noteWindow.NoteWindow;
-        let note = new NoteWindow(noteId, this, {
-            content: content,
-            x: x,
-            y: y,
-            width: width,
-            height: height,
-            color: color,
-            isPinned: isPinned || false
+        this._settings.connect('changed::save-directory', () => {
+            this._storage.setCustomDirectory(this._getSafe('save-directory', ''));
         });
 
+        this._loadNotes();
+    }
+
+    _getSafe(key, fallback) {
+        try { return this._settings.get_string(key); }
+        catch { return fallback; }
+    }
+
+    _loadNotes() {
+        const saved = this._storage.load();
+        saved.forEach(data => this._createNoteFromData(data));
+    }
+
+    _createNoteFromData(data) {
+        const note = new NoteWindow(data, this._settings);
+        note.connect('closing', () => this._removeNote(note));
+        note.connect('changed', () => this._scheduleSave());
+        note.connect('reminder-set', (_, timeMs) => this._scheduleReminder(note, timeMs));
+
+        Main.layoutManager.uiGroup.add_child(note);
         this._notes.push(note);
+
+        if (data.reminder && data.reminder > Date.now()) {
+            this._scheduleReminder(note, data.reminder);
+        }
         return note;
     }
 
-    loadNotes() {
-        let notesData = JSON.parse(this._settings.get_string('notes-data'));
+    createNew() {
+        return this._createNoteFromData({});
+    }
 
-        notesData.forEach(noteData => {
-            this.createNewNote(
-                noteData.content,
-                noteData.x,
-                noteData.y,
-                noteData.width,
-                noteData.height,
-                noteData.color,
-                noteData.isPinned
-            );
+    _scheduleReminder(note, triggerTimeMs) {
+        if (this._reminderSources.has(note._id)) {
+            this._reminderSources.get(note._id).destroy();
+        }
+
+        const now = Date.now();
+        if (triggerTimeMs <= now) return;
+
+        const delay = triggerTimeMs - now;
+        const source = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
+            this._showReminderNotification(note);
+            this._reminderSources.delete(note._id);
+            return false;
+        });
+        this._reminderSources.set(note._id, source);
+    }
+
+    _showReminderNotification(note) {
+        const title = note._titleEntry.text || 'Sticky Note Reminder';
+        const body = note._contentEntry.text.substring(0, 80) +
+            (note._contentEntry.text.length > 80 ? '...' : '') || 'Your reminder is due.';
+
+        const notif = new Gio.Notification();
+        notif.set_title(`⏰ ${title}`);
+        notif.set_body(body);
+        notif.set_priority(Gio.NotificationPriority.HIGH);
+
+        const app = Gio.Application.get_default();
+        if (app) app.send_notification(`reminder-${note._id}`, notif);
+    }
+
+    _removeNote(note) {
+        if (this._reminderSources.has(note._id)) {
+            GLib.Source.remove(this._reminderSources.get(note._id));
+            this._reminderSources.delete(note._id);
+        }
+        note.destroy();
+        this._notes = this._notes.filter(n => n !== note);
+        this._scheduleSave();
+    }
+
+    _scheduleSave() {
+        if (this._saveTimeout) GLib.Source.remove(this._saveTimeout);
+        this._saveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+            this._storage.save(this._notes.map(n => n.getData()));
+            this._saveTimeout = null;
+            return false;
         });
     }
 
-    saveNotes() {
-        let notesData = this._notes.map(note => ({
-            id: note.id,
-            content: note.getContent(),
-            x: note.getPosition()[0],
-            y: note.getPosition()[1],
-            width: note.getSize()[0],
-            height: note.getSize()[1],
-            color: note.getHeaderColor(),
-            isPinned: note.isPinned()
-        }));
-
-        this._settings.set_string('notes-data', JSON.stringify(notesData));
-    }
-
-    destroyNote(note) {
-        let index = this._notes.indexOf(note);
-        if (index !== -1) {
-            this._notes.splice(index, 1);
-            note.destroy();
-        }
-    }
-
-    destroyAllNotes() {
-        this._notes.forEach(note => note.destroy());
+    destroy() {
+        this._reminderSources.forEach(src => GLib.Source.remove(src));
+        this._reminderSources.clear();
+        if (this._saveTimeout) GLib.Source.remove(this._saveTimeout);
+        this._storage.save(this._notes.map(n => n.getData()));
+        this._notes.forEach(n => n.destroy());
         this._notes = [];
     }
-
-    getSettings() {
-        return this._settings;
-    }
-};
+});
